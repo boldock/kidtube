@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vidéos enfants — chaînes autorisées uniquement</title>
+  <!-- CSP : autorise nos scripts/styles inline et l'embed YouTube uniquement -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; frame-src https://www.youtube-nocookie.com https://www.youtube.com; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self';" />
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#38bdf8; --accent2:#22d3ee }
+    html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,var(--bg),#0b1220);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    header{padding:16px 20px;border-bottom:1px solid #1f2937}
+    header h1{margin:0;font-size:20px}
+    header p{margin:6px 0 0;color:var(--muted);font-size:14px}
+    .controls{display:flex;gap:12px;padding:12px 20px;align-items:center;flex-wrap:wrap}
+    .controls label{font-size:14px;color:var(--muted)}
+    select,button{background:var(--card);color:var(--text);border:1px solid #1f2937;border-radius:10px;padding:10px 12px;font-size:14px}
+    button{cursor:pointer}
+    button:hover{border-color:#334155}
+    .player-wrap{display:grid;place-items:center;padding:12px 20px 24px}
+    .player{width:min(1100px,100%);aspect-ratio:16/9;border-radius:16px;overflow:hidden;box-shadow:0 10px 32px rgba(0,0,0,.45)}
+    .chips{display:flex;gap:10px;padding:0 20px 8px;flex-wrap:wrap}
+    .chip{background:#0b1220;border:1px solid #1f2937;color:var(--muted);padding:6px 10px;border-radius:999px;font-size:12px;cursor:pointer}
+    .chip.active{color:#0b0f1a;background:linear-gradient(90deg,var(--accent),var(--accent2));border-color:transparent;font-weight:600}
+    footer{padding:12px 20px;color:var(--muted);font-size:12px;border-top:1px solid #1f2937}
+    footer a{color:var(--accent);text-decoration:none}
+    .lock{position:fixed;inset:0;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);background:rgba(0,0,0,.55);z-index:30}
+    .lock-card{background:#0b1220;border:1px solid #1f2937;border-radius:16px;padding:18px;width:min(420px,92%)}
+    .lock-card h3{margin:0 0 8px;font-size:18px}
+    .row{display:flex;gap:8px;align-items:center}
+    .row input{flex:1;background:var(--card);color:var(--text);border:1px solid #1f2937;border-radius:10px;padding:10px}
+    .row button{white-space:nowrap}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Vidéos pour les enfants — 🧒 espace sécurisé</h1>
+    <p>Seules les chaînes autorisées sont accessibles. Pas de lien sortant vers YouTube.</p>
+  </header>
+
+  <section class="controls">
+    <label for="channel">Chaîne :</label>
+    <select id="channel" aria-label="Sélection de la chaîne"></select>
+    <button id="prev">⏮️ Précédent</button>
+    <button id="next">⏭️ Suivant</button>
+    <button id="lockBtn" title="Verrou parent (optionnel)">🔒 Verrou</button>
+  </section>
+
+  <div class="chips" id="chips"></div>
+
+  <div class="player-wrap">
+    <div class="player">
+      <iframe id="yt" width="100%" height="100%" frameborder="0"
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        allowfullscreen
+        referrerpolicy="origin-when-cross-origin"
+        sandbox="allow-scripts allow-same-origin allow-presentation"
+        src="about:blank"
+        title="Lecteur vidéo sécurisé"></iframe>
+    </div>
+  </div>
+
+  <footer>
+    <span>Astuce : modifiez la constante <code>CHANNELS</code> ci-dessous avec vos chaînes (ID UC…).</span>
+  </footer>
+
+  <div class="lock" id="lock">
+    <div class="lock-card">
+      <h3>Verrou parent</h3>
+      <p style="margin-top:0;color:var(--muted)">Entrez le code PIN pour déverrouiller les commandes de la page.</p>
+      <div class="row" style="margin-top:8px">
+        <input id="pin" type="password" placeholder="Code PIN (par défaut 2025)" inputmode="numeric" maxlength="8" />
+        <button id="pinOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 1) Liste mixte : UC, @handle, user:
+const CHANNELS = [
+  { name: "Science Étonnante", id: "UCaNlbnghtwlsGF-KzAFThqA" },
+  { name: "e-penser", id: "UCcziTK2NKeWtWQ6kB5tmQ8Q" },
+  { name: "DirtyBiology", id: "UCtqICqGbPSbTN09K1_7VZ3Q" },
+  { name: "MicMaths (M. Launay)", id: "UC4PasDd25MXqlXBogBw9CAg" },
+  { name: "Dr Nozman", id: "UCWnfDPdZw6A23UtuBpYBbAg" },
+  { name: "Scilabus", id: "@Scilabus" },                      // handle
+  { name: "ScienceClic (FR)", id: "UCt6beFJtTqqd8Aqz0YwMctw" },
+  { name: "Balade Mentale", id: "UCS_7tplUgzJG4DhA16re5Yg" },
+  { name: "Nota Bene", id: "@NotaBeneVideo" },                // handle
+  { name: "C’est pas sorcier", id: "UCENv8pH4LkzvuSV_qHIcslg" },
+  { name: "Le Monde des Langues", id: "UC1ipKNAWcHhmcqKUEGg1RMg" },
+  { name: "Axolot", id: "UC2_OG1L8DLTzQ7UrZVOk7OA" },
+  { name: "Histony", id: "UCt8ctlakIflnSG0ebFps7cw" },
+  { name: "Les Topovaures", id: "UCToaRM06haIUw4uxvaGQCnA" },
+  { name: "ARTE", id: "UCwI-JbGNsojunnHbFAc0M4Q" },
+  { name: "Physics Girl", id: "UC7DdEm33SyaTDtWYGO2CwdA" },
+  { name: "Kurzgesagt", id: "UCsXVk37bltHxD1rDPwtNM8Q" },
+  { name: "MinutePhysics", id: "UCUHW94eEFW7hkUMVaZz4eDg" },
+  { name: "Veritasium", id: "@veritasium" },                  // handle
+  { name: "Smarter Every Day", id: "@smartereveryday" },      // handle
+  { name: "Joueur du Grenier", id: "user:joueurdugrenier" },  // legacy user
+  { name: "Game Spectrum", id: "@GameSpectrum" },             // handle
+  { name: "ExServ", id: "UC2FAM-zL-PhH0OkIT95aWJQ" },
+];
+
+// 2) Résolution : UC direct, @handle via search, user: via forUsername
+async function resolveChannelId(idOrHandle, apiKey) {
+  // UC déjà OK
+  if (/^UC[0-9A-Za-z_-]{22}$/.test(idOrHandle)) return idOrHandle;
+
+  // legacy user:
+  if (idOrHandle.startsWith("user:")) {
+    const username = idOrHandle.slice(5);
+    const u = new URL("https://www.googleapis.com/youtube/v3/channels");
+    u.searchParams.set("part", "id");
+    u.searchParams.set("forUsername", username);
+    u.searchParams.set("key", apiKey);
+    const r = await fetch(u).then(res => res.json());
+    if (r.items?.[0]?.id) return r.items[0].id;
+    throw new Error(`Impossible de résoudre /user/${username}`);
+  }
+
+  // @handle (ou nom libre) via search (solide et compatible)
+  const q = idOrHandle.startsWith("@") ? idOrHandle : `"${idOrHandle}"`;
+  const u = new URL("https://www.googleapis.com/youtube/v3/search");
+  u.searchParams.set("part", "id");
+  u.searchParams.set("type", "channel");
+  u.searchParams.set("maxResults", "1");
+  u.searchParams.set("q", q);
+  u.searchParams.set("key", apiKey);
+  const r = await fetch(u).then(res => res.json());
+  const cid = r.items?.[0]?.id?.channelId;
+  if (cid) return cid;
+
+  throw new Error(`Impossible de résoudre ${idOrHandle}`);
+}
+
+// 3) Au démarrage : pré-résoudre tous les IDs avant d’afficher
+async function bootstrapChannels(apiKey) {
+  const resolved = [];
+  for (const ch of CHANNELS) {
+    try {
+      const channelId = await resolveChannelId(ch.id, apiKey);
+      resolved.push({ ...ch, channelId });
+    } catch (e) {
+      console.warn("Résolution échouée pour", ch.name, ch.id, e);
+    }
+  }
+  return resolved.filter(c => c.channelId);
+}
+
+    // === 2) Utilitaires ===
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+    function uploadsPlaylistId(channelId){
+      if(!channelId || channelId.slice(0,2) !== 'UC') return '';
+      return 'UU' + channelId.slice(2);
+    }
+
+    function buildEmbedUrl(channelId){
+      const list = uploadsPlaylistId(channelId);
+      const params = new URLSearchParams();
+      params.set('listType','playlist');
+      params.set('list', list);
+      params.set('rel','0');
+      params.set('modestbranding','1');
+      params.set('fs','1');
+      params.set('disablekb','0');
+      params.set('iv_load_policy','3');
+      params.set('playsinline','1');
+      params.set('enablejsapi','1');
+      return 'https://www.youtube-nocookie.com/embed?' + params.toString();
+    }
+
+    let currentIndex = 0;
+
+    function setChannel(index){
+      currentIndex = Math.max(0, Math.min(CHANNELS.length - 1, index));
+      const chan = CHANNELS[currentIndex];
+      const url = buildEmbedUrl(chan.id);
+      const iframe = $('#yt');
+      iframe.src = url;
+      updateUI();
+    }
+
+    function updateUI(){
+      const sel = $('#channel');
+      sel.value = String(currentIndex);
+      $$('#chips .chip').forEach((el, i)=>{ el.classList.toggle('active', i === currentIndex); });
+      document.title = 'Vidéos enfants — ' + CHANNELS[currentIndex].name;
+    }
+
+    // === 3) Init UI ===
+    const select = $('#channel');
+    CHANNELS.forEach((c, i)=>{
+      const opt = document.createElement('option');
+      opt.value = String(i); opt.textContent = c.name;
+      select.appendChild(opt);
+    });
+
+    const chips = $('#chips');
+    CHANNELS.forEach((c, i)=>{
+      const b = document.createElement('button');
+      b.className = 'chip'; b.textContent = c.name;
+      b.addEventListener('click', ()=> setChannel(i));
+      chips.appendChild(b);
+    });
+
+    setChannel(0);
+
+    // === 4) Contrôles ===
+    select.addEventListener('change', (e)=> setChannel(parseInt(e.target.value, 10)));
+    $('#prev').addEventListener('click', ()=> setChannel((currentIndex - 1 + CHANNELS.length) % CHANNELS.length));
+    $('#next').addEventListener('click', ()=> setChannel((currentIndex + 1) % CHANNELS.length));
+    select.addEventListener('wheel', (e)=> e.preventDefault(), { passive: false });
+
+    // === 5) Verrou parent ===
+    const lock = $('#lock');
+    const lockBtn = $('#lockBtn');
+    let locked = false;
+    function applyLock(){
+      $$('.controls, .chips').forEach(el=> el.style.display = locked ? 'none' : 'flex');
+      lock.style.display = locked ? 'flex' : 'none';
+    }
+    lockBtn.addEventListener('click', ()=>{ locked = true; applyLock(); });
+    $('#pinOk').addEventListener('click', ()=>{
+      const val = $('#pin').value.trim();
+      if(val === PARENT_PIN){ locked = false; applyLock(); $('#pin').value = ''; }
+      else { alert('Code incorrect'); }
+    });
+
+    // === 6) Protections basiques ===
+    window.addEventListener('keydown', (e)=>{
+      const forbid = ( (e.ctrlKey && (e.key === 'p' || e.key === 's')) || e.key === 'F11' );
+      if(forbid){ e.preventDefault(); }
+    });
+  </script>
+</body>
+</html>
