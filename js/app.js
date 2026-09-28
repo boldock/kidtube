@@ -248,9 +248,9 @@
 
   function selectTab(kind) {
     videoKind = kind;
-    for (const tab of document.querySelectorAll('#videos .tab')) {
+    for (const tab of document.querySelectorAll('#videos [data-kind]')) {
       const on = tab.dataset.kind === kind;
-      tab.classList.toggle('active', on);
+      tab.classList.toggle('selected', on);
       tab.setAttribute('aria-selected', String(on));
     }
   }
@@ -306,7 +306,7 @@
     iframe.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  for (const tab of document.querySelectorAll('#videos .tab')) {
+  for (const tab of document.querySelectorAll('#videos [data-kind]')) {
     tab.addEventListener('click', () => { selectTab(tab.dataset.kind); renderVideos(); });
   }
 
@@ -548,7 +548,7 @@
     const chans = settings.channels;
     list.replaceChildren(...chans.map((c, i) => {
       const btn = (label, title, onClick, disabled = false) => {
-        const b = el('button', { type: 'button', className: 'mini', textContent: label, title, disabled });
+        const b = el('button', { type: 'button', className: 'btn-light btn--xs mini', textContent: label, title, disabled });
         b.setAttribute('aria-label', title);
         b.addEventListener('click', onClick);
         return b;
