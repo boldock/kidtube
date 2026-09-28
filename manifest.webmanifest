@@ -1,0 +1,13 @@
+{
+  "name": "KidTube",
+  "short_name": "KidTube",
+  "description": "Des vidéos pour les enfants, uniquement depuis les chaînes choisies par les parents.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
