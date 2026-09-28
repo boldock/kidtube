@@ -5,7 +5,7 @@ C'est un site statique (HTML/CSS/JS) : pas de serveur, pas de compte, pas de dé
 
 ## Fonctionnalités
 
-- **Accueil en tuiles** : de grosses tuiles colorées avec un emoji, faciles à utiliser pour un enfant.
+- **Accueil** : une carte par chaîne. Avec la clé d'API, chaque carte montre la dernière vidéo (vignette, durée, titre, chaîne, date, début de la description), et un clic la lance. Sans clé, la carte affiche la photo ou l'emoji de la chaîne.
 - **Lecteur limité aux chaînes autorisées** : le lecteur `youtube-nocookie.com` joue toutes les vidéos de la chaîne choisie (ou une playlist précise). Le lecteur est isolé (*sandbox* sans popups ni navigation), donc l'enfant ne peut pas partir vers YouTube.
 - **Espace parents protégé par un code PIN**, créé au premier accès à ⚙️ :
   - ajouter, retirer et réordonner les chaînes ;
