@@ -164,9 +164,11 @@
   }
 
   // Lecteur sur une vidéo précise, suivie des vidéos suivantes de la liste.
+  // Le lecteur joue la liste « playlist » à partir de son premier élément (la vidéo de l'URL
+  // est ignorée) : la vidéo choisie doit donc être en tête de liste.
   function videoEmbedUrl(videoId, nextIds) {
     const p = new URLSearchParams({ ...PLAYER_PARAMS });
-    if (nextIds.length) p.set('playlist', nextIds.slice(0, 50).join(','));
+    if (nextIds.length) p.set('playlist', [videoId, ...nextIds].slice(0, 50).join(','));
     return `https://www.youtube-nocookie.com/embed/${videoId}?` + p;
   }
 
