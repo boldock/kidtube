@@ -25,6 +25,10 @@
   });
 
   const settings = Object.assign(defaults(), load(STORE_KEY, {}));
+
+  // Corrige les identifiants erronés déjà enregistrés dans le navigateur.
+  const FIXED_IDS = { UC9Z1XWw1kmnvOOFsj6Bzy2g: 'UCeR8BYZS7IHYjk_9Mh5JgkA' }; // Scilabus
+  for (const c of settings.channels) if (FIXED_IDS[c.id]) c.id = FIXED_IDS[c.id];
   const persist = () => save(STORE_KEY, settings);
 
   const today = () => new Date().toLocaleDateString('sv'); // AAAA-MM-JJ, heure locale
