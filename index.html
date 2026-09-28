@@ -5,27 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>KidTube</title>
   <meta name="description" content="Des vidéos pour les enfants, uniquement depuis les chaînes choisies par les parents." />
-  <meta name="theme-color" content="#0f172a" />
-  <!-- Uniquement nos fichiers + le lecteur YouTube (sans cookies) + l'API YouTube (facultative, pour résoudre les @pseudos) -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://yt3.ggpht.com https://yt3.googleusercontent.com https://i.ytimg.com; frame-src https://www.youtube-nocookie.com; connect-src 'self' https://www.googleapis.com; manifest-src 'self'; base-uri 'none'; form-action 'none'" />
+  <meta name="theme-color" content="#ffffff" />
+  <!-- Uniquement nos fichiers + le lecteur YouTube (sans cookies) + l'API YouTube (facultative) et ses images -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: https://yt3.ggpht.com https://yt3.googleusercontent.com https://i.ytimg.com; frame-src https://www.youtube-nocookie.com; connect-src 'self' https://www.googleapis.com; manifest-src 'self'; base-uri 'none'; form-action 'none'" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <!-- Cirrus (https://cirrus-ui.com) et ses polices, hébergés localement -->
+  <link rel="stylesheet" href="vendor/fonts/fonts.css" />
+  <link rel="stylesheet" href="vendor/cirrus/cirrus.min.css" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <header class="topbar">
-    <button class="icon-btn" id="homeBtn" aria-label="Retour à l'accueil" hidden>⬅️</button>
+    <button class="btn-transparent btn--circle icon-btn" id="homeBtn" aria-label="Retour à l'accueil" hidden>⬅️</button>
     <h1 class="brand" id="title">KidTube</h1>
-    <span class="timer" id="timer" hidden></span>
-    <button class="icon-btn" id="parentBtn" aria-label="Espace parents">⚙️</button>
+    <span class="tag tag--rounded tag--info timer" id="timer" hidden></span>
+    <button class="btn-transparent btn--circle icon-btn" id="parentBtn" aria-label="Espace parents">⚙️</button>
   </header>
 
   <!-- Accueil : les chaînes autorisées -->
   <main id="home" class="screen">
-    <p class="hint">Choisis une vidéo 👇</p>
-    <div class="grid" id="grid"></div>
-    <p class="empty" id="empty" hidden>Aucune chaîne pour l'instant. Demande à un parent d'en ajouter dans ⚙️.</p>
+    <h2 class="hint">Choisis une vidéo 👇</h2>
+    <div class="video-grid" id="grid"></div>
+    <div class="toast toast--info" id="empty" hidden>Aucune chaîne pour l'instant. Demande à un parent d'en ajouter dans ⚙️.</div>
   </main>
 
   <!-- Lecteur -->
@@ -41,114 +44,133 @@
             src="about:blank"></iframe>
         </div>
         <nav class="watch-nav">
-          <button class="big-btn" id="prevBtn">⏮️ Chaîne précédente</button>
-          <button class="big-btn" id="nextBtn">Chaîne suivante ⏭️</button>
+          <button class="btn-light btn--pilled" id="prevBtn">⏮️ Chaîne précédente</button>
+          <button class="btn-light btn--pilled" id="nextBtn">Chaîne suivante ⏭️</button>
         </nav>
       </div>
       <!-- Vidéos de la chaîne : affiché seulement si une clé d'API est renseignée -->
       <aside class="videos" id="videos" hidden>
-        <div class="tabs" role="tablist">
-          <button class="tab active" role="tab" data-kind="recent" aria-selected="true">🆕 Récentes</button>
-          <button class="tab" role="tab" data-kind="popular" id="popularTab" aria-selected="false">⭐ Populaires</button>
+        <div class="tab-container tabs-fill">
+          <ul role="tablist">
+            <li class="selected" role="tab" data-kind="recent" aria-selected="true"><div class="tab-item-content">🆕 Récentes</div></li>
+            <li role="tab" data-kind="popular" id="popularTab" aria-selected="false"><div class="tab-item-content">⭐ Populaires</div></li>
+          </ul>
         </div>
         <ul class="video-list" id="videoList"></ul>
-        <p class="muted small center-text" id="videoStatus" hidden></p>
+        <p class="text-gray-600 u-text-center" id="videoStatus" hidden></p>
       </aside>
     </div>
   </main>
 
   <!-- Temps écoulé -->
-  <div class="overlay" id="timeUp" hidden>
-    <div class="card center">
-      <div class="big-emoji">🌙</div>
-      <h2>C'est fini pour aujourd'hui !</h2>
-      <p class="muted">Tu as regardé tes vidéos. À demain 👋</p>
-      <button class="link-btn" id="timeUpParent">Parent : ajouter du temps</button>
+  <div class="modal-container modal-container--visible" id="timeUp" hidden>
+    <div class="modal-overlay"></div>
+    <div class="modal modal--sm u-text-center">
+      <div class="modal-body">
+        <div class="big-emoji">🌙</div>
+        <h3>C'est fini pour aujourd'hui !</h3>
+        <p>Tu as regardé tes vidéos. À demain 👋</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-link" id="timeUpParent">Parent : ajouter du temps</button>
+      </div>
     </div>
   </div>
 
   <!-- Code PIN -->
-  <div class="overlay" id="pinDialog" hidden>
-    <form class="card" id="pinForm" autocomplete="off">
-      <h2 id="pinTitle">Espace parents</h2>
-      <p class="muted" id="pinHelp">Entrez votre code PIN.</p>
-      <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="12" placeholder="Code PIN" required />
-      <input id="pinInput2" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="12" placeholder="Confirmez le code" hidden />
-      <p class="error" id="pinError" hidden></p>
-      <div class="row end">
-        <button type="button" class="btn" id="pinCancel">Annuler</button>
-        <button type="submit" class="btn primary">Valider</button>
+  <div class="modal-container modal-container--visible" id="pinDialog" hidden>
+    <div class="modal-overlay"></div>
+    <form class="modal modal--sm" id="pinForm" autocomplete="off">
+      <div class="modal-header">
+        <div class="modal-title" id="pinTitle">Espace parents</div>
+      </div>
+      <div class="modal-body">
+        <p id="pinHelp">Entrez votre code PIN.</p>
+        <input class="input-control" id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="12" placeholder="Code PIN" required />
+        <input class="input-control" id="pinInput2" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="12" placeholder="Confirmez le code" hidden />
+        <p class="info text-danger" id="pinError" hidden></p>
+      </div>
+      <div class="modal-footer">
+        <div class="btn-container u-flex u-justify-flex-end u-gap-1">
+          <button type="button" class="btn-light" id="pinCancel">Annuler</button>
+          <button type="submit" class="btn-primary">Valider</button>
+        </div>
       </div>
     </form>
   </div>
 
   <!-- Espace parents -->
-  <div class="overlay" id="parent" hidden>
-    <div class="card wide">
-      <div class="row between">
-        <h2>Espace parents</h2>
-        <button class="btn" id="parentClose">Fermer</button>
+  <div class="modal-container modal-container--visible" id="parent" hidden>
+    <div class="modal-overlay"></div>
+    <div class="modal modal--lg parent-modal">
+      <div class="modal-header u-flex u-justify-space-between u-items-center">
+        <div class="modal-title">Espace parents</div>
+        <button class="btn-light btn--sm" id="parentClose">Fermer</button>
       </div>
 
-      <section>
-        <h3>Chaînes autorisées</h3>
-        <ul class="chan-list" id="chanList"></ul>
-        <form class="add-form" id="addForm" autocomplete="off">
-          <input id="addEmoji" maxlength="4" placeholder="🎬" aria-label="Emoji" />
-          <input id="addName" placeholder="Nom affiché" aria-label="Nom affiché" required />
-          <input id="addId" placeholder="ID UC…, lien de chaîne, lien de playlist ou @pseudo" aria-label="Chaîne" required />
-          <button type="submit" class="btn primary">Ajouter</button>
-        </form>
-        <p class="error" id="addError" hidden></p>
-        <details class="muted small">
-          <summary>Comment trouver l'ID d'une chaîne ?</summary>
-          <p>Sur YouTube, ouvrez la chaîne → « plus » dans la description → « Partager la chaîne » → « Copier l'ID de la chaîne » (il commence par <code>UC</code>).
-          Vous pouvez aussi coller un lien <code>youtube.com/channel/UC…</code> ou un lien de playlist (<code>…?list=PL…</code>).
-          Les <code>@pseudos</code> nécessitent une clé d'API YouTube (ci-dessous).</p>
-        </details>
-      </section>
+      <div class="modal-body">
+        <section>
+          <h6 class="section-title">Chaînes autorisées</h6>
+          <ul class="chan-list" id="chanList"></ul>
+          <form class="add-form" id="addForm" autocomplete="off">
+            <input class="input-control" id="addEmoji" maxlength="4" placeholder="🎬" aria-label="Emoji" />
+            <input class="input-control" id="addName" placeholder="Nom affiché" aria-label="Nom affiché" required />
+            <input class="input-control" id="addId" placeholder="ID UC…, lien de chaîne, lien de playlist ou @pseudo" aria-label="Chaîne" required />
+            <button type="submit" class="btn-primary">Ajouter</button>
+          </form>
+          <div class="toast toast--danger" id="addError" hidden></div>
+          <details>
+            <summary>Comment trouver l'ID d'une chaîne ?</summary>
+            <p>Sur YouTube, ouvrez la chaîne → « plus » dans la description → « Partager la chaîne » → « Copier l'ID de la chaîne » (il commence par <code>UC</code>).
+            Vous pouvez aussi coller un lien <code>youtube.com/channel/UC…</code> ou un lien de playlist (<code>…?list=PL…</code>).
+            Les <code>@pseudos</code> nécessitent une clé d'API YouTube (ci-dessous).</p>
+          </details>
+        </section>
 
-      <section>
-        <h3>Temps d'écran</h3>
-        <div class="row">
-          <label for="limitInput">Limite par jour (minutes, 0 = illimité)</label>
-          <input id="limitInput" type="number" min="0" max="600" step="5" />
-        </div>
-        <p class="muted small" id="usedToday"></p>
-        <div class="row">
-          <button class="btn" id="add15">+15 min aujourd'hui</button>
-          <button class="btn" id="resetToday">Remettre le compteur à zéro</button>
-        </div>
-      </section>
+        <div class="divider"></div>
 
-      <section>
-        <h3>Réglages</h3>
-        <div class="row">
-          <label for="apiKeyInput">Clé d'API YouTube (facultative)</label>
-          <input id="apiKeyInput" type="password" placeholder="AIza…" />
-        </div>
-        <div class="row">
-          <button class="btn" id="avatarsBtn">🖼️ Charger les photos des chaînes</button>
-        </div>
-        <p class="muted small" id="avatarStatus" hidden></p>
-        <details class="muted small">
-          <summary>Comment obtenir une clé d'API YouTube (gratuit) ?</summary>
-          <ol>
-            <li>Allez sur <code>console.cloud.google.com</code> et créez un projet.</li>
-            <li>« API et services » → « Bibliothèque » → activez <b>YouTube Data API v3</b>.</li>
-            <li>« Identifiants » → « Créer des identifiants » → « Clé API ».</li>
-            <li>Conseillé : restreignez la clé à cette API et à l'adresse de votre site (« Sites web »).</li>
-          </ol>
-          <p>La clé reste dans ce navigateur. Elle sert aux photos des chaînes et aux <code>@pseudos</code>.</p>
-        </details>
-        <div class="row">
-          <button class="btn" id="changePin">Changer le code PIN</button>
-          <button class="btn" id="exportBtn">Exporter</button>
-          <label class="btn" for="importFile">Importer</label>
-          <input id="importFile" type="file" accept="application/json" hidden />
-          <button class="btn danger" id="resetChannels">Chaînes par défaut</button>
-        </div>
-      </section>
+        <section>
+          <h6 class="section-title">Temps d'écran</h6>
+          <div class="form-group">
+            <label class="form-group-label" for="limitInput">Minutes par jour</label>
+            <input class="form-group-input" id="limitInput" type="number" min="0" max="600" step="5" placeholder="0 = illimité" />
+          </div>
+          <p class="text-gray-600" id="usedToday"></p>
+          <div class="u-flex u-gap-1 u-flex-wrap">
+            <button class="btn-light btn--sm" id="add15">+15 min aujourd'hui</button>
+            <button class="btn-light btn--sm" id="resetToday">Remettre le compteur à zéro</button>
+          </div>
+        </section>
+
+        <div class="divider"></div>
+
+        <section>
+          <h6 class="section-title">Réglages</h6>
+          <div class="form-group">
+            <label class="form-group-label" for="apiKeyInput">Clé d'API YouTube</label>
+            <input class="form-group-input" id="apiKeyInput" type="password" placeholder="AIza… (facultative)" />
+            <button class="form-group-btn btn-info" id="avatarsBtn" type="button">🖼️ Charger les photos</button>
+          </div>
+          <p class="text-gray-600" id="avatarStatus" hidden></p>
+          <details>
+            <summary>Comment obtenir une clé d'API YouTube (gratuit) ?</summary>
+            <ol>
+              <li>Allez sur <code>console.cloud.google.com</code> et créez un projet.</li>
+              <li>« API et services » → « Bibliothèque » → activez <b>YouTube Data API v3</b>.</li>
+              <li>« Identifiants » → « Créer des identifiants » → « Clé API ».</li>
+              <li>Conseillé : restreignez la clé à cette API et à l'adresse de votre site (« Sites web »).</li>
+            </ol>
+            <p>La clé reste dans ce navigateur. Elle sert aux photos et aux vidéos des chaînes, et aux <code>@pseudos</code>.</p>
+          </details>
+          <div class="u-flex u-gap-1 u-flex-wrap">
+            <button class="btn-light btn--sm" id="changePin">Changer le code PIN</button>
+            <button class="btn-light btn--sm" id="exportBtn">Exporter</button>
+            <label class="btn btn-light btn--sm" for="importFile">Importer</label>
+            <input id="importFile" type="file" accept="application/json" hidden />
+            <button class="btn-danger btn--sm" id="resetChannels">Chaînes par défaut</button>
+          </div>
+        </section>
+      </div>
     </div>
   </div>
 

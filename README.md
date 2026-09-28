@@ -52,11 +52,16 @@ La même clé sert à la liste des vidéos. Pour économiser le quota gratuit de
 
 Les adresses des photos sont enregistrées avec les chaînes et incluses dans l'export. Une chaîne peut aussi avoir un champ `avatar` dans `js/channels.js`.
 
+## Style
+
+L'interface utilise [Cirrus](https://cirrus-ui.com) (licence MIT) et ses polices Montserrat et Nunito Sans (licence SIL OFL). Ils sont hébergés dans `vendor/`, pour que le site ne dépende d'aucun serveur externe. `css/style.css` ne contient que les styles propres à KidTube.
+
 ## Structure
 
 ```
 index.html            page unique
-css/style.css         styles
+css/style.css         styles propres à KidTube (par-dessus Cirrus)
+vendor/               Cirrus et ses polices (hébergés localement)
 js/channels.js        chaînes par défaut
 js/app.js             logique (lecteur, PIN, temps d'écran, réglages)
 manifest.webmanifest  installation sur l'écran d'accueil
