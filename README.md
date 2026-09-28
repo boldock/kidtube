@@ -11,7 +11,7 @@ C'est un site statique (HTML/CSS/JS) : pas de serveur, pas de compte, pas de dé
   - ajouter, retirer et réordonner les chaînes ;
   - limiter le temps d'écran par jour, ajouter 15 min ou remettre le compteur à zéro ;
   - exporter ou importer les réglages en JSON (pour les copier sur un autre appareil) ;
-  - clé d'API YouTube facultative, pour ajouter une chaîne à partir de son `@pseudo`.
+  - clé d'API YouTube facultative, pour afficher les **photos de profil des chaînes** et ajouter une chaîne à partir de son `@pseudo`. Sans clé, chaque tuile affiche son emoji.
 - **Installable** sur une tablette ou un téléphone (« Ajouter à l'écran d'accueil »).
 
 Les réglages sont enregistrés dans le navigateur (`localStorage`). Ils sont donc propres à chaque appareil.
@@ -36,6 +36,18 @@ Dans ⚙️, collez l'un des éléments suivants :
 - un `@pseudo`, seulement si une clé d'API YouTube Data v3 est renseignée.
 
 La liste par défaut se trouve dans `js/channels.js`.
+
+## Photos des chaînes
+
+Les photos de profil sont récupérées avec l'API YouTube Data v3, qui demande une clé gratuite :
+
+1. Sur [console.cloud.google.com](https://console.cloud.google.com), créez un projet.
+2. « API et services » → « Bibliothèque » → activez **YouTube Data API v3**.
+3. « Identifiants » → « Créer des identifiants » → « Clé API ».
+4. Conseillé : restreignez la clé à cette API et à l'adresse de votre site.
+5. Collez la clé dans ⚙️ → Réglages. Les photos se chargent alors toutes seules.
+
+Les adresses des photos sont enregistrées avec les chaînes et incluses dans l'export. Une chaîne peut aussi avoir un champ `avatar` dans `js/channels.js`.
 
 ## Structure
 

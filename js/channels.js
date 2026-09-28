@@ -11,7 +11,7 @@ window.DEFAULT_CHANNELS = [
   { name: "e-penser",            emoji: "💡", id: "UCcziTK2NKeWtWQ6kB5tmQ8Q" },
   { name: "DirtyBiology",        emoji: "🦠", id: "UCtqICqGbPSbTN09K1_7VZ3Q" },
   { name: "Micmaths",            emoji: "➗", id: "UC4PasDd25MXqlXBogBw9CAg" },
-  { name: "Scilabus",            emoji: "🧲", id: "UC9Z1XWw1kmnvOOFsj6Bzy2g" },
+  { name: "Scilabus",            emoji: "🧲", id: "UCeR8BYZS7IHYjk_9Mh5JgkA" },
   { name: "ScienceClic",         emoji: "🌌", id: "UCt6beFJtTqqd8Aqz0YwMctw" },
   { name: "Balade Mentale",      emoji: "🧠", id: "UCS_7tplUgzJG4DhA16re5Yg" },
   { name: "Nota Bene",           emoji: "🏛️", id: "UCP46_MXP_WG_auH88FnfS1A" },
