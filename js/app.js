@@ -171,7 +171,7 @@
   }
 
   // ---------- Liste de vidéos de la chaîne (nécessite la clé d'API) ----------
-  const VIDEOS_KEY = 'kidtube.videos.v1';
+  const VIDEOS_KEY = 'kidtube.videos.v2';
   const VIDEOS_TTL = { recent: 3 * 3600e3, popular: 24 * 3600e3 };
   const VIDEO_ID_RE = /^[\w-]{11}$/;
   const THUMB_RE = /^https:\/\/i\.ytimg\.com\//;
@@ -206,20 +206,34 @@
     ).map(v => {
       const t = v.snippet.thumbnails || {};
       const thumb = (t.medium || t.high || t.default)?.url || '';
+      const large = (t.high || t.medium || t.default)?.url || '';
       return {
         id: v.id,
         title: v.snippet.title || '',
+        description: (v.snippet.description || '').slice(0, 300),
+        published: v.snippet.publishedAt || '',
         thumb: THUMB_RE.test(thumb) ? thumb : '',
+        thumbLarge: THUMB_RE.test(large) ? large : '',
         duration: formatDuration(v.contentDetails?.duration),
       };
     });
   }
 
-  async function getVideos(id, kind) {
+  const pendingVideos = new Map(); // requêtes en cours, pour ne pas appeler l'API deux fois
+
+  function getVideos(id, kind) {
     const cache = load(VIDEOS_KEY, {});
     const key = kind + ':' + id;
-    if (cache[key] && Date.now() - cache[key].at < VIDEOS_TTL[kind]) return cache[key].videos;
+    if (cache[key] && Date.now() - cache[key].at < VIDEOS_TTL[kind]) return Promise.resolve(cache[key].videos);
+    if (!pendingVideos.has(key)) {
+      pendingVideos.set(key, fetchAndCacheVideos(id, kind, key).finally(() => pendingVideos.delete(key)));
+    }
+    return pendingVideos.get(key);
+  }
+
+  async function fetchAndCacheVideos(id, kind, key) {
     const videos = await fetchVideos(id, kind);
+    const cache = load(VIDEOS_KEY, {});
     // On ne garde que les entrées récentes pour ne pas remplir le stockage.
     for (const k of Object.keys(cache)) if (Date.now() - cache[k].at > 24 * 3600e3) delete cache[k];
     cache[key] = { at: Date.now(), videos };
@@ -272,13 +286,17 @@
         el('span', { className: 'video-title', textContent: v.title }),
       ]);
       btn.dataset.id = v.id;
+      btn.classList.toggle('playing', v.id === playingId);
       btn.addEventListener('click', () => playVideo(videos, i));
       return el('li', {}, btn);
     }));
   }
 
+  let playingId = null;
+
   function playVideo(videos, i) {
     if (timeIsUp()) { showTimeUp(); return; }
+    playingId = videos[i].id;
     iframe.src = videoEmbedUrl(videos[i].id, videos.slice(i + 1).map(v => v.id));
     for (const b of document.querySelectorAll('#videoList .video')) {
       b.classList.toggle('playing', b.dataset.id === videos[i].id);
@@ -294,16 +312,64 @@
   const iframe = $('yt');
   let current = -1;
 
+  // « il y a 3 jours »
+  const relTime = new Intl.RelativeTimeFormat('fr', { numeric: 'auto' });
+  function timeAgo(iso) {
+    const s = (Date.parse(iso) - Date.now()) / 1000;
+    if (!Number.isFinite(s)) return '';
+    for (const [unit, secs] of [['year', 31536000], ['month', 2592000], ['week', 604800], ['day', 86400], ['hour', 3600]]) {
+      if (Math.abs(s) >= secs) return relTime.format(Math.round(s / secs), unit);
+    }
+    return relTime.format(Math.round(s / 60), 'minute');
+  }
+
+  let gridRequest = 0;
+
+  // Accueil : une carte par chaîne. Avec la clé d'API, la carte montre la dernière vidéo
+  // (vignette, titre, description) ; sinon, la photo ou l'emoji de la chaîne.
   function renderGrid() {
     const grid = $('grid');
+    const request = ++gridRequest;
     grid.replaceChildren(...settings.channels.map((c, i) => {
-      const tile = el('button', { className: 'tile', type: 'button' }, [
-        channelIcon(c, 'tile-icon'),
-        el('span', { className: 'tile-name', textContent: c.name }),
+      const cover = el('span', { className: 'card-cover' }, channelIcon(c, 'cover-icon'));
+      cover.style.setProperty('--hue', hueOf(c.name));
+      const title = el('span', { className: 'card-title', textContent: c.name });
+      const desc = el('span', { className: 'card-desc' });
+      const card = el('button', { className: 'vcard', type: 'button' }, [
+        cover,
+        el('span', { className: 'card-body' }, [
+          settings.apiKey ? channelIcon(c, 'card-avatar') : '',
+          el('span', { className: 'card-text' }, [
+            title,
+            el('span', { className: 'card-channel' }),
+            desc,
+          ]),
+        ]),
       ]);
-      tile.style.setProperty('--hue', hueOf(c.name));
-      tile.addEventListener('click', () => watch(i));
-      return tile;
+      let latest = null;
+      card.addEventListener('click', () => {
+        watch(i);
+        if (latest) playVideo(latest, 0);
+      });
+
+      if (settings.apiKey) {
+        card.classList.add('loading');
+        getVideos(c.id, 'recent').then(videos => {
+          if (request !== gridRequest || !videos.length) return;
+          latest = videos;
+          const v = videos[0];
+          if (v.thumbLarge || v.thumb) {
+            cover.replaceChildren(
+              el('img', { className: 'cover-img', src: v.thumbLarge || v.thumb, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' }),
+              el('span', { className: 'video-duration', textContent: v.duration }),
+            );
+          }
+          title.textContent = v.title;
+          card.querySelector('.card-channel').textContent = [c.name, timeAgo(v.published)].filter(Boolean).join(' · ');
+          desc.textContent = v.description.replace(/\s+/g, ' ').trim();
+        }).catch(() => {}).finally(() => card.classList.remove('loading'));
+      }
+      return card;
     }));
     show($('empty'), settings.channels.length === 0);
   }
@@ -313,6 +379,7 @@
     if (!n) return;
     if (timeIsUp()) { showTimeUp(); return; }
     current = ((index % n) + n) % n;
+    playingId = null;
     const chan = settings.channels[current];
     iframe.src = embedUrl(chan.id);
     $('title').textContent = `${chan.emoji || '📺'} ${chan.name}`;
