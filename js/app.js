@@ -29,6 +29,10 @@
   // Corrige les identifiants erronés déjà enregistrés dans le navigateur.
   const FIXED_IDS = { UC9Z1XWw1kmnvOOFsj6Bzy2g: 'UCeR8BYZS7IHYjk_9Mh5JgkA' }; // Scilabus
   for (const c of settings.channels) if (FIXED_IDS[c.id]) c.id = FIXED_IDS[c.id];
+  // Reprend les images de profil de la liste par défaut pour les chaînes qui n'en ont pas encore.
+  for (const c of settings.channels) {
+    c.avatar ||= (window.DEFAULT_CHANNELS || []).find(d => d.id === c.id)?.avatar || '';
+  }
   const persist = () => save(STORE_KEY, settings);
 
   const today = () => new Date().toLocaleDateString('sv'); // AAAA-MM-JJ, heure locale
@@ -91,20 +95,57 @@
     return null;
   }
 
-  async function resolveHandle(handle) {
-    if (!settings.apiKey) {
-      throw new Error("Les @pseudos nécessitent une clé d'API YouTube. Sinon, collez l'ID de chaîne (UC…).");
-    }
+  // Seules les images de profil hébergées par YouTube sont acceptées (voir la CSP dans index.html).
+  const AVATAR_RE = /^https:\/\/yt3\.(ggpht|googleusercontent)\.com\//;
+
+  // Appel à l'API YouTube Data v3 : renvoie { id, avatar } pour chaque chaîne trouvée.
+  async function fetchChannels(params) {
     const u = new URL('https://www.googleapis.com/youtube/v3/channels');
-    u.searchParams.set('part', 'id');
-    u.searchParams.set('forHandle', handle);
+    u.searchParams.set('part', 'snippet');
+    for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
     u.searchParams.set('key', settings.apiKey);
     const res = await fetch(u);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error('API YouTube : ' + (data.error?.message || res.status));
-    const id = data.items?.[0]?.id;
-    if (!id) throw new Error(`Chaîne introuvable pour ${handle}.`);
-    return id;
+    return (data.items || []).map(item => {
+      const t = item.snippet?.thumbnails || {};
+      const avatar = (t.medium || t.high || t.default)?.url || '';
+      return { id: item.id, avatar: AVATAR_RE.test(avatar) ? avatar : '' };
+    });
+  }
+
+  async function resolveHandle(handle) {
+    if (!settings.apiKey) {
+      throw new Error("Les @pseudos nécessitent une clé d'API YouTube. Sinon, collez l'ID de chaîne (UC…).");
+    }
+    const [found] = await fetchChannels({ forHandle: handle });
+    if (!found) throw new Error(`Chaîne introuvable pour ${handle}.`);
+    return found;
+  }
+
+  // Récupère les images de profil des chaînes (par paquets de 50, la limite de l'API).
+  async function loadAvatars(channels) {
+    const ids = [...new Set(channels.map(c => c.id).filter(id => CHANNEL_RE.test(id)))];
+    const avatars = {};
+    for (let i = 0; i < ids.length; i += 50) {
+      for (const { id, avatar } of await fetchChannels({ id: ids.slice(i, i + 50).join(','), maxResults: 50 })) {
+        if (avatar) avatars[id] = avatar;
+      }
+    }
+    let count = 0;
+    for (const c of channels) {
+      if (avatars[c.id]) { c.avatar = avatars[c.id]; count += 1; }
+    }
+    return count;
+  }
+
+  // Image de profil si disponible, sinon l'emoji (y compris si l'image ne se charge pas).
+  function channelIcon(c, className) {
+    const emoji = el('span', { className: className + ' emoji', textContent: c.emoji || '📺' });
+    if (!c.avatar) return emoji;
+    const img = el('img', { className, src: c.avatar, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' });
+    img.addEventListener('error', () => img.replaceWith(emoji), { once: true });
+    return img;
   }
 
   // Une chaîne UC… a une playlist « toutes les vidéos » UU… ; une playlist est utilisée telle quelle.
@@ -131,7 +172,7 @@
     const grid = $('grid');
     grid.replaceChildren(...settings.channels.map((c, i) => {
       const tile = el('button', { className: 'tile', type: 'button' }, [
-        el('span', { className: 'tile-emoji', textContent: c.emoji || '📺' }),
+        channelIcon(c, 'tile-icon'),
         el('span', { className: 'tile-name', textContent: c.name }),
       ]);
       tile.style.setProperty('--hue', hueOf(c.name));
@@ -316,7 +357,7 @@
       };
       const move = (d) => () => { [chans[i], chans[i + d]] = [chans[i + d], chans[i]]; channelsChanged(); };
       return el('li', {}, [
-        el('span', { className: 'chan-emoji', textContent: c.emoji || '📺' }),
+        channelIcon(c, 'chan-icon'),
         el('span', { className: 'chan-name', textContent: c.name }),
         el('code', { className: 'chan-id', textContent: c.id }),
         btn('▲', 'Monter', move(-1), i === 0),
@@ -335,13 +376,16 @@
     const source = parseSource($('addId').value);
     try {
       if (!source) throw new Error("Format non reconnu. Collez un ID UC…, un lien de chaîne YouTube ou un lien de playlist.");
-      const id = source.id || await resolveHandle(source.handle);
-      if (settings.channels.some(c => c.id === id)) throw new Error('Cette chaîne est déjà dans la liste.');
-      settings.channels.push({
+      const found = source.id ? { id: source.id, avatar: '' } : await resolveHandle(source.handle);
+      if (settings.channels.some(c => c.id === found.id)) throw new Error('Cette chaîne est déjà dans la liste.');
+      const chan = {
         name: $('addName').value.trim(),
         emoji: $('addEmoji').value.trim() || '📺',
-        id,
-      });
+        id: found.id,
+        avatar: found.avatar,
+      };
+      if (!chan.avatar && settings.apiKey) await loadAvatars([chan]).catch(() => 0);
+      settings.channels.push(chan);
       channelsChanged();
       e.target.reset();
     } catch (ex) {
@@ -370,7 +414,26 @@
   $('apiKeyInput').addEventListener('change', (e) => {
     settings.apiKey = e.target.value.trim();
     persist();
+    if (settings.apiKey) refreshAvatars();
   });
+
+  async function refreshAvatars() {
+    const status = $('avatarStatus');
+    show(status, true);
+    if (!settings.apiKey) {
+      status.textContent = "Renseignez d'abord une clé d'API YouTube ci-dessus.";
+      return;
+    }
+    status.textContent = 'Chargement des photos…';
+    try {
+      const n = await loadAvatars(settings.channels);
+      channelsChanged();
+      status.textContent = `${n} photo${n > 1 ? 's' : ''} de chaîne chargée${n > 1 ? 's' : ''}.`;
+    } catch (ex) {
+      status.textContent = ex.message;
+    }
+  }
+  $('avatarsBtn').addEventListener('click', refreshAvatars);
 
   $('changePin').addEventListener('click', async () => {
     show($('parent'), false);
@@ -403,7 +466,9 @@
       const chans = (data.channels || []).filter(c =>
         c && typeof c.name === 'string' && (CHANNEL_RE.test(c.id) || PLAYLIST_RE.test(c.id)));
       if (!chans.length) throw new Error();
-      settings.channels = chans.map(({ name, emoji, id }) => ({ name, emoji: emoji || '📺', id }));
+      settings.channels = chans.map(({ name, emoji, id, avatar }) => ({
+        name, emoji: emoji || '📺', id, avatar: AVATAR_RE.test(avatar || '') ? avatar : '',
+      }));
       if (Number.isFinite(data.limitMin)) settings.limitMin = Math.max(0, Math.min(600, data.limitMin));
       channelsChanged();
       renderParent();
