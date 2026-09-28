@@ -99,14 +99,18 @@
   const AVATAR_RE = /^https:\/\/yt3\.(ggpht|googleusercontent)\.com\//;
 
   // Appel à l'API YouTube Data v3 : renvoie { id, avatar } pour chaque chaîne trouvée.
-  async function fetchChannels(params) {
-    const u = new URL('https://www.googleapis.com/youtube/v3/channels');
-    u.searchParams.set('part', 'snippet');
+  async function apiGet(endpoint, params) {
+    const u = new URL('https://www.googleapis.com/youtube/v3/' + endpoint);
     for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
     u.searchParams.set('key', settings.apiKey);
     const res = await fetch(u);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error('API YouTube : ' + (data.error?.message || res.status));
+    return data;
+  }
+
+  async function fetchChannels(params) {
+    const data = await apiGet('channels', { part: 'snippet', ...params });
     return (data.items || []).map(item => {
       const t = item.snippet?.thumbnails || {};
       const avatar = (t.medium || t.high || t.default)?.url || '';
@@ -151,17 +155,139 @@
   // Une chaîne UC… a une playlist « toutes les vidéos » UU… ; une playlist est utilisée telle quelle.
   const playlistOf = (id) => CHANNEL_RE.test(id) ? 'UU' + id.slice(2) : id;
 
+  const PLAYER_PARAMS = { rel: '0', iv_load_policy: '3', playsinline: '1', modestbranding: '1', hl: 'fr', autoplay: '1' };
+
+  // Lecteur sur toute la chaîne (ou la playlist).
   function embedUrl(id) {
-    const p = new URLSearchParams({
-      list: playlistOf(id),
-      rel: '0',
-      iv_load_policy: '3',
-      playsinline: '1',
-      modestbranding: '1',
-      hl: 'fr',
-      autoplay: '1',
-    });
+    const p = new URLSearchParams({ list: playlistOf(id), ...PLAYER_PARAMS });
     return 'https://www.youtube-nocookie.com/embed/videoseries?' + p;
+  }
+
+  // Lecteur sur une vidéo précise, suivie des vidéos suivantes de la liste.
+  function videoEmbedUrl(videoId, nextIds) {
+    const p = new URLSearchParams({ ...PLAYER_PARAMS });
+    if (nextIds.length) p.set('playlist', nextIds.slice(0, 50).join(','));
+    return `https://www.youtube-nocookie.com/embed/${videoId}?` + p;
+  }
+
+  // ---------- Liste de vidéos de la chaîne (nécessite la clé d'API) ----------
+  const VIDEOS_KEY = 'kidtube.videos.v1';
+  const VIDEOS_TTL = { recent: 3 * 3600e3, popular: 24 * 3600e3 };
+  const VIDEO_ID_RE = /^[\w-]{11}$/;
+  const THUMB_RE = /^https:\/\/i\.ytimg\.com\//;
+
+  // « PT1H2M3S » → « 1:02:03 »
+  function formatDuration(iso) {
+    const [, h = 0, m = 0, sec = 0] = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso || '') || [];
+    const pad = (n) => String(n).padStart(2, '0');
+    return +h ? `${h}:${pad(m)}:${pad(sec)}` : `${+m}:${pad(sec)}`;
+  }
+
+  async function fetchVideos(id, kind) {
+    let ids;
+    if (kind === 'popular') {
+      // La recherche coûte 100 unités de quota : le résultat est gardé 24 h.
+      const data = await apiGet('search', {
+        part: 'id', channelId: id, order: 'viewCount', type: 'video', safeSearch: 'strict', maxResults: 30,
+      });
+      ids = (data.items || []).map(it => it.id?.videoId);
+    } else {
+      const data = await apiGet('playlistItems', { part: 'contentDetails', playlistId: playlistOf(id), maxResults: 30 });
+      ids = (data.items || []).map(it => it.contentDetails?.videoId);
+    }
+    ids = ids.filter(v => VIDEO_ID_RE.test(v || ''));
+    if (!ids.length) return [];
+
+    // Titres, miniatures et durées ; on écarte les vidéos non intégrables et les directs.
+    const data = await apiGet('videos', { part: 'snippet,contentDetails,status', id: ids.join(',') });
+    const byId = new Map((data.items || []).map(v => [v.id, v]));
+    return ids.map(v => byId.get(v)).filter(v =>
+      v && v.status?.embeddable !== false && (v.snippet?.liveBroadcastContent || 'none') === 'none'
+    ).map(v => {
+      const t = v.snippet.thumbnails || {};
+      const thumb = (t.medium || t.high || t.default)?.url || '';
+      return {
+        id: v.id,
+        title: v.snippet.title || '',
+        thumb: THUMB_RE.test(thumb) ? thumb : '',
+        duration: formatDuration(v.contentDetails?.duration),
+      };
+    });
+  }
+
+  async function getVideos(id, kind) {
+    const cache = load(VIDEOS_KEY, {});
+    const key = kind + ':' + id;
+    if (cache[key] && Date.now() - cache[key].at < VIDEOS_TTL[kind]) return cache[key].videos;
+    const videos = await fetchVideos(id, kind);
+    // On ne garde que les entrées récentes pour ne pas remplir le stockage.
+    for (const k of Object.keys(cache)) if (Date.now() - cache[k].at > 24 * 3600e3) delete cache[k];
+    cache[key] = { at: Date.now(), videos };
+    save(VIDEOS_KEY, cache);
+    return videos;
+  }
+
+  let videoKind = 'recent';
+  let videoRequest = 0;
+
+  function selectTab(kind) {
+    videoKind = kind;
+    for (const tab of document.querySelectorAll('#videos .tab')) {
+      const on = tab.dataset.kind === kind;
+      tab.classList.toggle('active', on);
+      tab.setAttribute('aria-selected', String(on));
+    }
+  }
+
+  async function renderVideos() {
+    const chan = settings.channels[current];
+    const panel = $('videos');
+    const list = $('videoList');
+    const status = $('videoStatus');
+    list.replaceChildren();
+    show(panel, Boolean(settings.apiKey && chan));
+    if (!settings.apiKey || !chan) return;
+    show($('popularTab'), CHANNEL_RE.test(chan.id));
+
+    const request = ++videoRequest;
+    status.textContent = 'Chargement des vidéos…';
+    show(status, true);
+    let videos;
+    try {
+      videos = await getVideos(chan.id, videoKind);
+    } catch {
+      if (request === videoRequest) status.textContent = 'Impossible de charger la liste des vidéos.';
+      return;
+    }
+    if (request !== videoRequest) return; // l'enfant a changé de chaîne entre-temps
+
+    show(status, videos.length === 0);
+    status.textContent = 'Aucune vidéo.';
+    list.replaceChildren(...videos.map((v, i) => {
+      const thumb = v.thumb
+        ? el('img', { className: 'video-thumb', src: v.thumb, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' })
+        : el('span', { className: 'video-thumb' });
+      const btn = el('button', { type: 'button', className: 'video' }, [
+        el('span', { className: 'video-thumb-wrap' }, [thumb, el('span', { className: 'video-duration', textContent: v.duration })]),
+        el('span', { className: 'video-title', textContent: v.title }),
+      ]);
+      btn.dataset.id = v.id;
+      btn.addEventListener('click', () => playVideo(videos, i));
+      return el('li', {}, btn);
+    }));
+  }
+
+  function playVideo(videos, i) {
+    if (timeIsUp()) { showTimeUp(); return; }
+    iframe.src = videoEmbedUrl(videos[i].id, videos.slice(i + 1).map(v => v.id));
+    for (const b of document.querySelectorAll('#videoList .video')) {
+      b.classList.toggle('playing', b.dataset.id === videos[i].id);
+    }
+    iframe.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  for (const tab of document.querySelectorAll('#videos .tab')) {
+    tab.addEventListener('click', () => { selectTab(tab.dataset.kind); renderVideos(); });
   }
 
   // ---------- Écrans ----------
@@ -196,11 +322,14 @@
     show($('homeBtn'), true);
     if (push) history.pushState({ watch: current }, '');
     else history.replaceState({ watch: current }, '');
+    selectTab('recent');
+    renderVideos();
   }
 
   function goHome({ fromHistory = false } = {}) {
     iframe.src = 'about:blank';
     current = -1;
+    videoRequest += 1;
     $('title').textContent = 'KidTube';
     document.title = 'KidTube';
     show($('watch'), false);

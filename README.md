@@ -12,6 +12,7 @@ C'est un site statique (HTML/CSS/JS) : pas de serveur, pas de compte, pas de dé
   - limiter le temps d'écran par jour, ajouter 15 min ou remettre le compteur à zéro ;
   - exporter ou importer les réglages en JSON (pour les copier sur un autre appareil) ;
   - clé d'API YouTube facultative, pour afficher les **photos de profil des chaînes** et ajouter une chaîne à partir de son `@pseudo`. Sans clé, chaque tuile affiche son emoji.
+- **Liste des vidéos de la chaîne** à côté du lecteur (si une clé d'API est renseignée), avec deux onglets, « 🆕 Récentes » et « ⭐ Populaires ». Un clic lance la vidéo, et les suivantes de la liste s'enchaînent. Les directs et les vidéos non intégrables sont écartés.
 - **Installable** sur une tablette ou un téléphone (« Ajouter à l'écran d'accueil »).
 
 Les réglages sont enregistrés dans le navigateur (`localStorage`). Ils sont donc propres à chaque appareil.
@@ -46,6 +47,8 @@ Les photos de profil sont récupérées avec l'API YouTube Data v3, qui demande 
 3. « Identifiants » → « Créer des identifiants » → « Clé API ».
 4. Conseillé : restreignez la clé à cette API et à l'adresse de votre site.
 5. Collez la clé dans ⚙️ → Réglages. Les photos se chargent alors toutes seules.
+
+La même clé sert à la liste des vidéos. Pour économiser le quota gratuit de l'API (10 000 unités par jour), les listes sont gardées en cache : 3 h pour les récentes, 24 h pour les populaires. L'onglet « Populaires » coûte environ 100 unités par chaîne et par jour ; « Récentes » environ 2.
 
 Les adresses des photos sont enregistrées avec les chaînes et incluses dans l'export. Une chaîne peut aussi avoir un champ `avatar` dans `js/channels.js`.
 

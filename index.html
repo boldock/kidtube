@@ -7,7 +7,7 @@
   <meta name="description" content="Des vidéos pour les enfants, uniquement depuis les chaînes choisies par les parents." />
   <meta name="theme-color" content="#0f172a" />
   <!-- Uniquement nos fichiers + le lecteur YouTube (sans cookies) + l'API YouTube (facultative, pour résoudre les @pseudos) -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://yt3.ggpht.com https://yt3.googleusercontent.com; frame-src https://www.youtube-nocookie.com; connect-src 'self' https://www.googleapis.com; manifest-src 'self'; base-uri 'none'; form-action 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://yt3.ggpht.com https://yt3.googleusercontent.com https://i.ytimg.com; frame-src https://www.youtube-nocookie.com; connect-src 'self' https://www.googleapis.com; manifest-src 'self'; base-uri 'none'; form-action 'none'" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
@@ -30,18 +30,31 @@
 
   <!-- Lecteur -->
   <main id="watch" class="screen" hidden>
-    <div class="player">
-      <iframe id="yt" title="Lecteur vidéo"
-        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-        allowfullscreen
-        referrerpolicy="strict-origin-when-cross-origin"
-        sandbox="allow-scripts allow-same-origin allow-presentation"
-        src="about:blank"></iframe>
+    <div class="watch-layout">
+      <div class="watch-main">
+        <div class="player">
+          <iframe id="yt" title="Lecteur vidéo"
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            allowfullscreen
+            referrerpolicy="strict-origin-when-cross-origin"
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+            src="about:blank"></iframe>
+        </div>
+        <nav class="watch-nav">
+          <button class="big-btn" id="prevBtn">⏮️ Chaîne précédente</button>
+          <button class="big-btn" id="nextBtn">Chaîne suivante ⏭️</button>
+        </nav>
+      </div>
+      <!-- Vidéos de la chaîne : affiché seulement si une clé d'API est renseignée -->
+      <aside class="videos" id="videos" hidden>
+        <div class="tabs" role="tablist">
+          <button class="tab active" role="tab" data-kind="recent" aria-selected="true">🆕 Récentes</button>
+          <button class="tab" role="tab" data-kind="popular" id="popularTab" aria-selected="false">⭐ Populaires</button>
+        </div>
+        <ul class="video-list" id="videoList"></ul>
+        <p class="muted small center-text" id="videoStatus" hidden></p>
+      </aside>
     </div>
-    <nav class="watch-nav">
-      <button class="big-btn" id="prevBtn">⏮️ Chaîne précédente</button>
-      <button class="big-btn" id="nextBtn">Chaîne suivante ⏭️</button>
-    </nav>
   </main>
 
   <!-- Temps écoulé -->
